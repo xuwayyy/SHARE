@@ -61,13 +61,13 @@ python main.py  --task sr --dataset PaviaUni --factor 2 --lr 1e-3 --alpha 1 --tr
 ### Train Inpainting
 Train Share with inpainting on Chikusei dataset, run
 ```
-python main.py --task inpainting --dataset Chikusei --lr 1e-2 --index your_index --mat_index 0-3 --transform Shift
+python main.py --task inpainting --dataset Chikusei --lr 1e-2 --index your_index --mat_index your_mat_index --transform Shift
 ```
 **index** means which tile from full Chikusei, **mat_index** means which mask shape
 
 Train Share with inpainting on Indian Pines dataset, run
 ```
-python main.py --task inpainting --dataset Indian --lr 1e-2 --transform Shift
+python main.py --task inpainting --dataset Indian -mat_index your_mat_index --lr 1e-2 --transform Shift-
 ```
 
 ### Other Features
