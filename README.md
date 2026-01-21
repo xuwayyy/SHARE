@@ -7,7 +7,8 @@ Jiangwei Xie\*, Zhang Wen\*, Mike Davies, Dongdong Chen
 
 📬 **Corresponding Author**:  
 Dongdong Chen (d.chen@hw.ac.uk)
--Primary contact: Jiangwei Xie ([xiejiangweiouc@gmail.com](xiejiangweiouc@gmail.com))
+
+- Primary contact: Jiangwei Xie ([xiejiangweiouc@gmail.com](xiejiangweiouc@gmail.com))
 
 📎 **arXiv**:  
 https://arxiv.org/abs/2601.13987  
