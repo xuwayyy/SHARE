@@ -27,7 +27,7 @@ opencv-python==4.12.0
 numpy==1.26.0
 ```
 ### Installation Example
-
+```
 conda create -n share python=3.10 -y
 conda activate share
 
