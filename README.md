@@ -33,7 +33,7 @@ numpy==1.26.0
 conda create -n share python=3.10 -y
 conda activate share
 ```
-Install pytorch=2.2.0, cuda 12.1 version from github and install other essential resources
+Install ```pytorch=2.2.0, cuda 12.1``` version from pytorch org first and install other essential resources
 ```
 pip install deepinv==0.3.0
 pip install pyiqa==0.1.14.1
