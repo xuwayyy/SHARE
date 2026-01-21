@@ -7,6 +7,7 @@ Jiangwei Xie\*, Zhang Wen\*, Mike Davies, Dongdong Chen
 
 📬 **Corresponding Author**:  
 Dongdong Chen (d.chen@hw.ac.uk)
+-Primary contact: Jiangwei Xie ([xiejiangweiouc@gmail.com](xiejiangweiouc@gmail.com))
 
 📎 **arXiv**:  
 https://arxiv.org/abs/2601.13987  
@@ -75,9 +76,8 @@ We have provided a zoo of different transformations and loss functions, enjoy yo
 Similar with training command but configure your task from ```inpainting/sr``` to ```test_inpainting/test_inpainting``` , please make sure your testing params in command should align with training, e.g., lr should same.
 
 
-
 ## Citation
-If you find this work useful, please cite:
+If you find our work useful, please cite:
 
 ```
 @misc{xie2026sharefullyunsupervisedframework,
@@ -92,4 +92,4 @@ If you find this work useful, please cite:
 ```
 
 ## Acknowledgements
-Most of our code is build upon [deepinverse](https://github.com/deepinv/deepinv), thanks for their framework
+Most of our code is built upon [deepinverse](https://github.com/deepinv/deepinv), thanks for their framework
