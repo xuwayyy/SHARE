@@ -10,7 +10,6 @@ Dongdong Chen (d.chen@hw.ac.uk)
 
 📎 **arXiv**:  
 https://arxiv.org/abs/2601.13987  
-https://arxiv.org/pdf/2601.13987
 
 ---
 
@@ -26,9 +25,9 @@ deepinv==0.3.0
 pyiqa==0.1.14.1
 opencv-python==4.12.0
 numpy==1.26.0
-
-### Installation Example
 ```
+### Installation Example
+
 conda create -n share python=3.10 -y
 conda activate share
 
@@ -45,6 +44,7 @@ After downloading, place the data under ```data/Matzoo```
 
 ## Citation
 If you find this work useful, please cite:
+
 ```
 @misc{xie2026sharefullyunsupervisedframework,
       title={SHARE: A Fully Unsupervised Framework for Single Hyperspectral Image Restoration},
@@ -55,5 +55,4 @@ If you find this work useful, please cite:
       primaryClass={eess.IV},
       url={https://arxiv.org/abs/2601.13987},
 }
-
 ```
