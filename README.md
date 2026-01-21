@@ -62,6 +62,7 @@ Train Share with inpainting on Chikusei dataset, run
 python main.py --task inpainting --dataset Chikusei --lr 1e-2 --index your_index --mat_index 0-3 --transform Shift
 ```
 **index** means which tile from full Chikusei, **mat_index** means which mask shape
+
 Train Share with inpainting on Indian Pines dataset, run
 ```
 python main.py --task inpainting --dataset Indian --lr 1e-2 --transform Shift
