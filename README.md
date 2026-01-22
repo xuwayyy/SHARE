@@ -41,7 +41,7 @@ pip install opencv-python==4.12.0
 pip install numpy==1.26.0
 ```
 ## Dataset Preparation
-For Chikusei Dataset, please download the Chikusei hyperspectral dataset from [Chikusei_Full_Image](https://naotoyokoya.com/Download.html), and download the 5 tiles for inpainting at [Chikusei_Test_5images.mat](https://drive.google.com/file/d/1hsE4uxQgHTZK-0amcCYIzFTAz5JRnipj/view?usp=share_link)
+For Chikusei Dataset, please download the Chikusei hyperspectral dataset from [Chikusei_Full_Image](https://naotoyokoya.com/Download.html), and download the 5 tiles for inpainting at [Chikusei_Test_5images.mat](https://drive.google.com/file/d/1hsE4uxQgHTZK-0amcCYIzFTAz5JRnipj/view?usp=share_link); Download PaviaU and Indian Pines dataset from [here](https://www.ehu.eus/ccwintco/index.php?title=Hyperspectral_Remote_Sensing_Scenes#Indian_Pines)
 
 After downloading, place the data under ```data/Matzoo```
 
