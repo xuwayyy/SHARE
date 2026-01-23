@@ -1,17 +1,16 @@
 # SHARE: A Fully Unsupervised Framework for Single Hyperspectral Image Restoration
 
-📄 **Paper**:  
-**SHARE: A Fully Unsupervised Framework for Single Hyperspectral Image Restoration**  
-Jiangwei Xie\*, Zhang Wen\*, Mike Davies, Dongdong Chen  
-\* Equal contribution  
+[![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2601.13987)
+[![GitHub Stars](https://img.shields.io/github/stars/xuwayyy/SHARE?style=social)](https://github.com/xuwayyy/SHARE)
 
-📬 **Corresponding Author**:  
-Dongdong Chen (d.chen@hw.ac.uk)
 
-- Primary contact: Jiangwei Xie ([xiejiangweiouc@gmail.com](xiejiangweiouc@gmail.com))
+[SHARE: A Fully Unsupervised Framework for Single Hyperspectral Image Restoration]([https://openaccess.thecvf.com/content/CVPR2022/papers/Chen_Robust_Equivariant_Imaging_A_Fully_Unsupervised_Framework_for_Learning_To_CVPR_2022_paper.pdf](https://arxiv.org/pdf/2601.13987))
+ 
+[Jiangwei Xie](https://scholar.google.co.uk/citations?user=gwCocBkAAAAJ&hl=en&oi=ao), [Zhang Wen](https://scholar.google.co.uk/citations?user=tzvIt4EAAAAJ&hl=en), [Mike E. Davies](https://www.research.ed.ac.uk/en/persons/michael-davies), [Dongdong Chen](https://dongdongchen.com)  
 
-📎 **arXiv**:  
-https://arxiv.org/abs/2601.13987  
+## Background
+
+Hyperspectral image (HSI) restoration is a fundamental challenge in computational imaging and computer vision. It involves ill-posed inverse problems, such as inpainting and super-resolution. Although deep learning methods have transformed the field through data-driven learning, their effectiveness hinges on access to meticulously curated ground-truth datasets. This fundamentally restricts their applicability in real-world scenarios where such data is unavailable. This paper presents **SHARE** (Single Hyperspectral imAge Restoration with Equivariance), a **fully unsupervised** framework that unifies **geometric equivariance principles** with **low-rank spectral modelling** to eliminate the need for ground truth. SHARE's core concept is to exploit the intrinsic invariance of hyperspectral structures under differentiable geometric transformations (e.g. rotations and scaling) to derive self-supervision signals through equivariance consistency constraints. Our novel Dynamic Adaptive Spectral Attention (DASA) module further enhances this paradigm shift by explicitly encoding the global low-rank property of HSI and adaptively refining local spectral-spatial correlations through learnable attention mechanisms. Extensive experiments on HSI inpainting and super-resolution tasks demonstrate the effectiveness of SHARE. Our method outperforms many state-of-the-art unsupervised approaches and achieves performance comparable to that of supervised methods. We hope that our approach will shed new light on HSI restoration and broader scientific imaging scenarios.
 
 ---
 
