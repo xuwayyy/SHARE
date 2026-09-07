@@ -1,4 +1,4 @@
-# SHARE: A Fully Unsupervised Framework for Single Hyperspectral Image Restoration
+# Spatial-Spectral Equivariant Learning for Fully Unsupervised Single Hyperspectral Image Restoration
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2601.13987)
 [![GitHub Stars](https://img.shields.io/github/stars/xuwayyy/SHARE?style=social)](https://github.com/xuwayyy/SHARE)
