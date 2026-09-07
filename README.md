@@ -66,7 +66,15 @@ bash scripts/run.sh inp train
 We have provided a zoo of different transformations and loss functions; enjoy your trip.
 
 ## Testing
-Similar to the training command, but configure your task from ```inpainting/sr``` to ```test_inpainting/test_inpainting```. Please make sure your testing params in the command align with training; e.g., lr should same.
+Similar to the training command. For SR run
+```
+bash scripts/run.sh sr test
+```
+For inpainting run
+```
+bash scripts/run.sh inp test
+```
+Please make sure your testing params in the command align with training; e.g., lr should same.
 
 
 ## Citation
