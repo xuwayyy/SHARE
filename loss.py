@@ -9,18 +9,16 @@ from deepinv.loss import TVLoss
 
 
 class SureRECLoss(Loss):
-    def __init__(self, device, alpha, transform_ei, sigma=0.1, gain=1/20, noise_type="gaussian", unsure=False):
-        """
-        :param alpha: the weight coefficient, loss = sure + alpha * ei
-        :param sigma: the gaussian noise level in physics, default=0.1
-        :param transform_ei: transformation for ei loss
-        """
+    def __init__(self, device, alpha, transform_ei, sigma=0.1, gain=1 / 20, noise_type="gaussian", unsure=False):
+
         super(SureRECLoss, self).__init__()
         self.device = device
+        self.noise_type = noise_type
         if noise_type == "gaussian":
             self.sure = SureGaussianLoss(sigma=sigma, unsure=unsure)
         elif noise_type == "poisson":
             self.sure = SurePoissonLoss(gain=gain)
+
         elif noise_type == 'gaussian_poisson':
             self.sure = SurePGLoss(sigma=sigma, gain=gain, unsure=unsure)
 
@@ -49,18 +47,15 @@ class MCECLoss(Loss):
         noise_model = physics.noise_model
         physics.noise_model = GaussianNoise(0)
         loss_mc = self.mc(y=y, x_net=x_net, physics=physics).mean()
-        loss_ei = self.ei(x_net=x_net, physics=physics, model=model).mean()
+        loss_ei = self.ec(x_net=x_net, physics=physics, model=model).mean()
         loss = loss_ei + loss_mc
         physics.noise_model = noise_model  # still re-load noise model, or in test observation has no noise
         return loss_mc, loss_ei, loss
 
+
 class MCRECLoss(Loss):
     def __init__(self, device, alpha, transform_ei):
-        """
-        :param alpha: the weight coefficient, loss = sure + alpha * ei
-        :param sigma: the gaussian noise level in physics, default=0.1
-        :param transform_ei: transformation for ei loss
-        """
+
         super(MCRECLoss, self).__init__()
         self.device = device
         self.mc = MCLoss()
@@ -69,7 +64,7 @@ class MCRECLoss(Loss):
     def forward(self, y, physics, model):
         x_net = model(y)
         noise_model = physics.noise_model
-        loss_ei = self.ei(x_net=x_net, physics=physics, model=model).mean()
+        loss_ei = self.rec(x_net=x_net, physics=physics, model=model).mean()
         physics.noise_model = GaussianNoise(0)
         loss_mc = self.mc(y=y, x_net=x_net, physics=physics).mean()
         physics.noise_model = noise_model
@@ -78,12 +73,8 @@ class MCRECLoss(Loss):
 
 
 class SureECLoss(Loss):
-    def __init__(self, device, alpha, transform_ei, sigma=0.1, gain=1/20, noise_type="gaussian"):
-        """
-        :param alpha: the weight coefficient, loss = sure + alpha * ei
-        :param sigma: the gaussian noise level in physics, default=0.1
-        :param transform_ei: transformation for ei loss
-        """
+    def __init__(self, device, alpha, transform_ei, sigma=0.1, gain=1 / 20, noise_type="gaussian"):
+
         super(SureECLoss, self).__init__()
         self.device = device
         if noise_type == "gaussian":
@@ -100,10 +91,11 @@ class SureECLoss(Loss):
         noise_model = physics.noise_model
         physics.noise_model = GaussianNoise(0)
         loss_sure = self.sure(y=y, x_net=x_net, model=model, physics=physics).mean()
-        loss_ei = self.ei(x_net=x_net, physics=physics, model=model).mean()
+        loss_ei = self.ec(x_net=x_net, physics=physics, model=model).mean()
         physics.noise_model = noise_model
         loss = loss_ei + loss_sure
         return loss_sure, loss_ei, loss
+
 
 class HandMCLoss(Loss):
     def __init__(self):
@@ -139,10 +131,9 @@ class SureTvLoss(Loss):
 
 
 class RECLoss(Loss):
-    def __init__(self, device, alpha, transform_ei):
+    def __init__(self, alpha, transform_ei):
         super(RECLoss, self).__init__()
         self.ec = EILoss(transform=transform_ei, weight=alpha)
-        self.device = device
 
     def forward(self, y, physics, model):
         x_net = model(y)
@@ -165,7 +156,7 @@ class ECLoss(Loss):
 
 
 class SureLoss(Loss):
-    def __init__(self, sigma=0.1, gain = 1/25,  unsure=False, noise_type="gaussian"):
+    def __init__(self, sigma=0.1, gain=1 / 25, unsure=False, noise_type="gaussian"):
         super(SureLoss, self).__init__()
         if noise_type == "gaussian":
             self.sure = SureGaussianLoss(sigma=sigma)
@@ -182,6 +173,29 @@ class SureLoss(Loss):
         physics.noise_model = noise_model
         return loss_sure
 
+
+class UnSureRECLoss(Loss):
+    def __init__(self, device, alpha, transform_ei, sigma=0.1, gain=1 / 25, noise_type='gaussian', ):
+        super(UnSureRECLoss, self).__init__()
+        self.rec = RECLoss(alpha, transform_ei)
+        if noise_type == "gaussian":
+            self.unsure = SureGaussianLoss(sigma=sigma, unsure=True)
+        elif noise_type == "poisson":
+            self.unsure = SurePoissonLoss(gain=gain)
+        elif noise_type == 'gaussian_poisson':
+            self.unsure = SurePGLoss(sigma=sigma, gain=gain, unsure=True)
+
+    def forward(self, y, physics, model):
+        loss_rec = self.rec(y=y, physics=physics, model=model).mean()
+        x_net = model(y)
+        noise_model = physics.noise_model
+        physics.noise_model = GaussianNoise(0)
+        loss_unsure = self.unsure(y=y, x_net=x_net, model=model, physics=physics).mean()
+        physics.noise_model = noise_model
+        loss = loss_rec + loss_unsure
+        return loss_unsure, loss_rec, loss
+
+
 class R2RRECLoss(Loss):
     def __init__(self, physics, device, alpha, transform_ei):
         super(R2RRECLoss, self).__init__()
@@ -194,11 +208,11 @@ class R2RRECLoss(Loss):
         x_net = model(y, physics, update_parameters=True)
         loss_r2r = self.r2r(x_net, y=y, physics=physics, model=model).mean()
         loss = loss_rec + loss_r2r
-        return  loss_r2r, loss_rec, loss
+        return loss_r2r, loss_rec, loss
 
 
 class UnsureLoss(Loss):
-    def __init__(self, sigma=0.1, gain=1/25, noise_type='gaussian', unsure=True):
+    def __init__(self, sigma=0.1, gain=1 / 25, noise_type='gaussian', ):
         super(UnsureLoss, self).__init__()
         if noise_type == "gaussian":
             self.unsure = SureGaussianLoss(sigma=sigma, unsure=True)
@@ -212,11 +226,12 @@ class UnsureLoss(Loss):
         loss_unsure = self.unsure(y=y, x_net=x_net, model=model, physics=physics).mean()
         return loss_unsure
 
+
 class HandR2RLoss(Loss):
     def __init__(self, physics):
         super(HandR2RLoss, self).__init__()
         self.r2r = R2RLoss(noise_model=physics.noise_model)
-    
+
     def forward(self, y, physics, model):
         model = self.r2r.adapt_model(model)
         x_net = model(y, physics, update_parameters=True)

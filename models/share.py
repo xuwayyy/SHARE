@@ -1,23 +1,24 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.block import SE_block
+from timm.models.layers import to_2tuple
 
 
-
-class Share(nn.Module):
-    def __init__(self, in_channel, physics, window_size=8, layers=3, channel_dim=128):
-        super(Share, self).__init__()
-        self.res_block = UNet3D(in_channels=1, out_channels=1,
-                                window_size=window_size, layers=layers, channels_out=in_channel, channel_dim=channel_dim)
+class SHARE(nn.Module):
+    def __init__(self, in_channel, physics, window_size=8, layers=3, channel_dim=128, rank=4, memory_blocks=256):
+        super(SHARE, self).__init__()
+        self.res_block = UNet3D(in_channels=1, out_channels=1, # this is for 3D convolution
+                                window_size=window_size, layers=layers, channels_out=in_channel,
+                                channel_dim=channel_dim,
+                                rank=rank, memory_blocks=memory_blocks)
         self.physics = physics
 
-    def forward(self, x):
+    def forward(self, x, physics=None):
         dagger = self.physics.A_adjoint(x)
         return self.res_block(dagger)
 
-class ConvBlock(nn.Module):
 
+class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ConvBlock, self).__init__()
         self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1)
@@ -33,7 +34,8 @@ class ConvBlock(nn.Module):
 
 
 class UNet3D(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1, base_channels=1, layers=4, channel_dim=32, window_size=6, channels_out=31):
+    def __init__(self, in_channels=1, out_channels=1, base_channels=1, layers=4, channel_dim=32,
+                 window_size=6, channels_out=31, rank=4, memory_blocks=256):
         super(UNet3D, self).__init__()
 
         self.layers = layers
@@ -52,10 +54,10 @@ class UNet3D(nn.Module):
             self.pools.append(nn.MaxPool3d(kernel_size=2, stride=2))
             self.attn.append(
                 SE_block(dim=attn_dim, window_size=window_size, input_resolution=window_size, num_heads=8,
-                         down_rank=4, memory_blocks=256,
-                         qkv_bias=True))
+                         down_rank=rank, memory_blocks=memory_blocks, qkv_bias=True))
             channels *= 2
 
+        # Bottleneck
         self.bottleneck = ConvBlock(channels, channels * 2)
 
         self.up_blocks = nn.ModuleList()
@@ -65,7 +67,10 @@ class UNet3D(nn.Module):
             self.dec_blocks.append(ConvBlock(channels * 2, channels))
             channels //= 2
 
+        # 最终输出层
         self.final_conv = nn.Conv3d(base_channels * 2, out_channels, kernel_size=1)
+        # self.final_conv = nn.Conv3d(channels, out_channels, kernel_size=1)
+
         self.first = nn.Conv2d(channels_out, channel_dim, kernel_size=3, padding=1)
         self.out = nn.Conv2d(channel_dim, channels_out, kernel_size=3, padding=1)
 
@@ -80,6 +85,7 @@ class UNet3D(nn.Module):
 
         # Bottleneck
         x = self.bottleneck(x)
+
         for i in range(self.layers):
             x = self.up_blocks[i](x)
             x = torch.cat((enc_outputs[self.layers - i - 1], x), dim=1)  # 跳跃连接
@@ -87,7 +93,6 @@ class UNet3D(nn.Module):
             x = x.reshape(B, D * C, H, W)
             x = self.attn[i](x)
             x = x.reshape(B, D, C, H, W)
-
             x = self.dec_blocks[i](x)
 
         out = self.final_conv(x)
@@ -97,154 +102,132 @@ class UNet3D(nn.Module):
 
 
 
-
-class BasicConv(nn.Module):
-    def __init__(self, in_channel, out_channel, kernel_size, stride, bias=True, norm=False, relu=True, transpose=False):
-        super(BasicConv, self).__init__()
-        if bias and norm:
-            bias = False
-
-        padding = kernel_size // 2
-        layers = list()
-        if transpose:
-            padding = kernel_size // 2 - 1
-            layers.append(
-                nn.ConvTranspose2d(in_channel, out_channel, kernel_size, padding=padding, stride=stride, bias=bias))
-        else:
-            layers.append(
-                nn.Conv2d(in_channel, out_channel, kernel_size, padding=padding, stride=stride, bias=bias))
-        if norm:
-            layers.append(nn.BatchNorm2d(out_channel))
-        if relu:
-            layers.append(nn.GELU())
-        self.main = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.main(x)
+def window_partition(x, window_size):
+    B, H, W, C = x.shape
+    x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
+    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
+    return windows
 
 
+def window_reverse(windows, window_size, H, W):
+    B = int(windows.shape[0] / (H * W / window_size / window_size))
+    x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
+    return x
 
-class ResBlock(nn.Module):
-    def __init__(self, in_channel, out_channel, filter=True, window_size=8):
-        super(ResBlock, self).__init__()
-        self.main = nn.Sequential(
-            BasicConv(in_channel, out_channel, kernel_size=3, stride=1, relu=True),
-            DeepPoolLayer(in_channel, out_channel, window_size) if filter else nn.Identity(),
-            BasicConv(out_channel, out_channel, kernel_size=3, stride=1, relu=False)
-        )
-        # self.physics = physics
+
+class ChannelAttention(nn.Module):
+    def __init__(self, num_feat, squeeze_factor=16, memory_blocks=128):
+        super(ChannelAttention, self).__init__()
+        self.pool = nn.AdaptiveAvgPool1d(1)
+        self.subnet = nn.Sequential(nn.Linear(num_feat, num_feat // squeeze_factor))
+        self.upnet = nn.Sequential(nn.Linear(num_feat // squeeze_factor, num_feat), nn.Sigmoid())
+        self.mb = torch.nn.Parameter(torch.randn(num_feat // squeeze_factor, memory_blocks))
+        self.low_dim = num_feat // squeeze_factor
 
     def forward(self, x):
-        return self.main(x) + x
-
-
-class DeepPoolLayer(nn.Module):
-    def __init__(self, k, k_out, window_size=8):
-        super(DeepPoolLayer, self).__init__()
-        self.pools_sizes = [8, 4, 2]
-        dilation = [3, 7, 9]
-        pools, convs, dynas = [], [], []
-        for j, i in enumerate(self.pools_sizes):
-            pools.append(nn.AvgPool2d(kernel_size=i, stride=i))
-            convs.append(nn.Conv2d(k, k, 3, 1, 1, bias=False))
-            dynas.append(DualBranch(in_channels=k, dilation=dilation[j], windown_size=window_size))
-        self.pools = nn.ModuleList(pools)
-        self.convs = nn.ModuleList(convs)
-        self.dynas = nn.ModuleList(dynas)
-        self.relu = nn.GELU()
-        self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
-
-    def forward(self, x):
-        x_size = x.size()
-        resl = x
-        for i in range(len(self.pools_sizes)):
-            if i == 0:
-                y = self.dynas[i](self.convs[i](self.pools[i](x)))
-            else:
-                y = self.dynas[i](self.convs[i](self.pools[i](x) + y_up))
-            resl = torch.add(resl, F.interpolate(y, x_size[2:], mode='bilinear', align_corners=True))
-            if i != len(self.pools_sizes) - 1:
-                y_up = F.interpolate(y, scale_factor=2, mode='bilinear', align_corners=True)
-        resl = self.relu(resl)
-        resl = self.conv_sum(resl)
-
-        return resl
-
-
-class dynamic_filter(nn.Module):
-    def __init__(self, inchannels, kernel_size=3, dilation=1, stride=1, group=8):
-        super(dynamic_filter, self).__init__()
-        self.stride = stride
-        self.kernel_size = kernel_size
-        self.group = group
-        self.dilation = dilation
-
-        self.conv = nn.Conv2d(inchannels, group * kernel_size ** 2, kernel_size=1, stride=1, bias=False)
-        self.bn = nn.BatchNorm2d(group * kernel_size ** 2)
-        self.act = nn.Tanh()
-
-        nn.init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')
-        self.lamb_l = nn.Parameter(torch.zeros(inchannels), requires_grad=True)
-        self.lamb_h = nn.Parameter(torch.zeros(inchannels), requires_grad=True)
-        self.pad = nn.ReflectionPad2d(self.dilation * (kernel_size - 1) // 2)
-
-        self.ap = nn.AdaptiveAvgPool2d((1, 1))
-        self.gap = nn.AdaptiveAvgPool2d(1)
-
-        self.inside_all = nn.Parameter(torch.zeros(inchannels, 1, 1), requires_grad=True)
-
-    def forward(self, x):
-        identity_input = x
-        low_filter = self.ap(x)
-        low_filter = self.conv(low_filter)
-        # low_filter = self.bn(low_filter)
-
-        n, c, h, w = x.shape
-        x = F.unfold(self.pad(x), kernel_size=self.kernel_size, dilation=self.dilation).reshape(n, self.group,
-                                                                                                c // self.group,
-                                                                                                self.kernel_size ** 2,
-                                                                                                h * w)
-
-        n, c1, p, q = low_filter.shape
-        low_filter = low_filter.reshape(n, c1 // self.kernel_size ** 2, self.kernel_size ** 2, p * q).unsqueeze(2)
-
-        low_filter = self.act(low_filter)
-
-        low_part = torch.sum(x * low_filter, dim=3).reshape(n, c, h, w)
-
-        out_low = low_part * (self.inside_all + 1.) - self.inside_all * self.gap(identity_input)
-
-        out_low = out_low * self.lamb_l[None, :, None, None]
-
-        out_high = (identity_input) * (self.lamb_h[None, :, None, None] + 1.)
-
-        return out_low + out_high
-
-
-class DualBranch(nn.Module):
-    def __init__(self, dilation, in_channels, dim=128, heads=8, windown_size=16, downrank=4, memory_blocks=256):
-        super(DualBranch, self).__init__()
-        self.spectral_attn = SE_block(dim=dim, window_size=windown_size, input_resolution=windown_size, num_heads=heads,
-                                      down_rank=downrank, qkv_bias=True, memory_blocks=memory_blocks)
-        self.spatial_attn = dynamic_filter(inchannels=dim, kernel_size=3, dilation=dilation, group=8)
-
-        self.first = nn.Conv2d(in_channels, dim, kernel_size=3, stride=1, padding=1, bias=False)
-        self.proj = nn.Conv2d(dim, in_channels, kernel_size=1)
-
-    def forward(self, x):
-        residual_1 = x.clone()
-        x = self.first(x)
-        spatial = self.spatial_attn(x)
-        spectral = self.spectral_attn(x)
-        attn = spatial + spectral
-        attn = attn + x
-        attn = self.proj(attn)
-        out = attn + residual_1
+        b, n, c = x.shape
+        t = x.transpose(1, 2)
+        y = self.pool(t).squeeze(-1)
+        low_rank_f = self.subnet(y).unsqueeze(2)
+        mbg = self.mb.unsqueeze(0).repeat(b, 1, 1)
+        f1 = (low_rank_f.transpose(1, 2)) @ mbg
+        f_dic_c = F.softmax(f1 * (int(self.low_dim) ** (-0.5)), dim=-1)
+        y1 = f_dic_c @ mbg.transpose(1, 2)
+        y2 = self.upnet(y1)
+        out = x * y2
         return out
 
 
-if __name__ == '__main__':
-    resblock = ResBlock(in_channel=31, out_channel=31, filter=True, window_size=8)
-    x = torch.randn(2, 31, 128, 128)
-    y = resblock(x)
-    print(y.shape)
+class CAB(nn.Module):
+    def __init__(self, num_feat, compress_ratio=3, squeeze_factor=30, memory_blocks=128):
+        super(CAB, self).__init__()
+        self.cab = nn.Sequential(
+            nn.Linear(num_feat, num_feat // compress_ratio),
+            nn.GELU(),
+            nn.Linear(num_feat // compress_ratio, num_feat),
+            ChannelAttention(num_feat, squeeze_factor, memory_blocks)
+        )
+
+    def forward(self, x):
+        return self.cab(x)
+
+
+class WindowAttention(nn.Module):
+    def __init__(self, dim, window_size, num_heads, qkv_bias=0, qk_scale=None, memory_blocks=128, down_rank=16,
+                 attn_drop=0., proj_drop=0.):
+        super().__init__()
+        self.dim = dim
+        self.window_size = window_size
+        self.num_heads = num_heads
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+        self.c_attns = CAB(dim, compress_ratio=4, squeeze_factor=down_rank, memory_blocks=memory_blocks)
+
+    def forward(self, x, mask=None):
+        x3 = self.c_attns(x)
+        x = self.proj(x3)
+        x = self.proj_drop(x)
+        return x
+
+
+class SE_block(nn.Module):
+    def __init__(self, dim, input_resolution, num_heads, window_size=7, drop_path=0.0, memory_blocks=128, down_rank=16,
+                 qkv_bias=True, qk_scale=None, drop=0., shift_size=0, attn_drop=0., act_layer=nn.GELU):
+        super(SE_block, self).__init__()
+        self.dim = dim
+        self.input_resolution = input_resolution
+        self.num_heads = num_heads
+        self.window_size = window_size
+        self.norm1 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim)
+
+        self.shift_size = shift_size
+        self.attns = WindowAttention(dim, window_size=to_2tuple(self.window_size), num_heads=num_heads,
+                                     memory_blocks=memory_blocks, down_rank=down_rank, qkv_bias=qkv_bias,
+                                     qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+        x = x.flatten(2).transpose(1, 2)
+        x = self.norm1(x)
+        x = x.view(B, H, W, C)
+
+        pad_h = (self.window_size - H % self.window_size) % self.window_size
+        pad_w = (self.window_size - W % self.window_size) % self.window_size
+
+        if pad_h > 0 or pad_w > 0:
+            x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
+            H_pad = H + pad_h
+            W_pad = W + pad_w
+        else:
+            H_pad = H
+            W_pad = W
+
+
+        if self.shift_size > 0:
+            shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+        else:
+            shifted_x = x
+
+        x_windows = window_partition(shifted_x, self.window_size)
+        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)
+        attn_windows = self.attns(x_windows)
+        attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
+
+        shifted_x = window_reverse(attn_windows, self.window_size, H_pad, W_pad)
+
+
+        if self.shift_size > 0:
+            x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
+        else:
+            x = shifted_x
+
+        if pad_h > 0 or pad_w > 0:
+            x = x[:, :H, :W, :]
+
+        x = x.permute(0, 3, 1, 2)
+        return x
