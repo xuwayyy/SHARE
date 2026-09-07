@@ -5,7 +5,6 @@ import os
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import torch
-import torch.nn.functional as F
 
 
 def crop_sub_img(data: np.array, patch: tuple, stride: tuple):
@@ -51,11 +50,12 @@ def createDataset(mat_path, patch=(31, 512, 512), stride=(31, 512, 512), name='f
 
 
 class CaveDataset(Dataset):
-    def __init__(self, hr_patches, transform=None, mode='train', task='single'):
+    def __init__(self, hr_patches, transform=None, mode='train',  retain_ratio=1.0):
         super().__init__()
-        self.task = task
         self.whole_patches = hr_patches
+        self.retain_ratio = retain_ratio  # ← 存下来
         print("total patches:", len(self.whole_patches))
+
         if mode == 'train':
             self.hr_patches = hr_patches[: int(len(hr_patches) * 0.6875)]  # 22 / 32 images training
         else:
@@ -69,18 +69,16 @@ class CaveDataset(Dataset):
         self.mode = mode
 
     def __len__(self):
-        if self.task == "single":
-            return len(self.hr_patches)
-        else:  # single image sr, only allow batch=1
-            return 1  
+        return 1
 
     def __getitem__(self, idx):
-        if self.task == 'single':
-            hr_patch = self.whole_patches[0]
-        else:
-            hr_patch = self.hr_patches[idx]
+        hr_patch = self.whole_patches[0]
 
-        hr_patch = np.transpose(hr_patch, (1, 2, 0))
+        in_ch_full = hr_patch.shape[0]  # 31
+        in_ch = int(round(in_ch_full * self.retain_ratio))
+        hr_patch = hr_patch[:in_ch, :, :]
+
+        hr_patch = np.transpose(hr_patch, (1, 2, 0))  # (H, W, C)
 
         if self.transform:
             hr_patch = self.transform(hr_patch)
@@ -88,9 +86,9 @@ class CaveDataset(Dataset):
         return hr_patch
 
 
-def makeDataLoader(mat_path="", task='single', mode='train', transform=None, bs=1, name='fake_and_real_beers_ms.mat'):
+def makeDataLoader(mat_path="", mode='train', transform=None, bs=1, name='fake_and_real_beers_ms.mat', retain_ratio=1.0):
     hr_patches = createDataset(mat_path=mat_path, name=name)
-    dataset = CaveDataset(hr_patches, transform=transform, mode=mode, task=task)
+    dataset = CaveDataset(hr_patches, transform=transform, mode=mode, retain_ratio=retain_ratio)
     if mode == 'train':
         dataloader = DataLoader(dataset, batch_size=bs, shuffle=True, num_workers=0)
     else:

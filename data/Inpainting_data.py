@@ -26,26 +26,28 @@ def min_max_norm_channel(x):
 def load_inpainting_mat(chikusei_index=2):
     chikusei = h5py.File("./data/Matzoo/Chikusei_Test_5_images.mat")
     chikusei = chikusei["gt_blob"]
-    indian_pine = loadmat("./data/Matzoo/Indian_pines_corrected.mat")
-    indian_pine = indian_pine["indian_pines_corrected"]
 
     chikusei = np.array(chikusei, dtype=np.float32, order='F')
     chikusei = chikusei[:, :, :, chikusei_index]
-    indian_pine = np.array(indian_pine, dtype=np.float32, order='F')
-    indian_pine = indian_pine[:144, : 144, :]
-    # normalized_indian_pine = (indian_pine - np.min(indian_pine)) / (np.max(indian_pine) - np.min(indian_pine))
-    normalized_indian_pine = min_max_norm_channel(indian_pine)
-    return chikusei, normalized_indian_pine
+    return chikusei,
 
 
-def get_inpainting_dataset(device, chikusei_index=2):
+def get_inpainting_dataset(device, chikusei_index=2, retain_ratio=1.0):
     bands = [128, 200]
     image_size = 144
-    chikusei, indian_pine = load_inpainting_mat(chikusei_index=chikusei_index)
-    chikusei = torch.Tensor(chikusei).permute(2, 0, 1).view(1, bands[0], image_size, image_size).to(device)
-    indian_pine = torch.Tensor(indian_pine).permute(2, 0, 1).view(1, bands[1], image_size, image_size).to(device)
+    chikusei = load_inpainting_mat(chikusei_index=chikusei_index)
+
+
+    chikusei_bands = int(round(bands[0] * retain_ratio))   # 128 * ratio
+
+    chikusei = (torch.Tensor(chikusei)
+                .permute(2, 0, 1)  # (128, 144, 144)
+                [:chikusei_bands]  # (N, 144, 144)  ← 切片
+                .view(1, chikusei_bands, image_size, image_size)
+                .to(device))
+
+
     mat_zoo = {}
-    mat_zoo['indian_pine'] = indian_pine
     mat_zoo['chikusei'] = chikusei
     return mat_zoo
 
