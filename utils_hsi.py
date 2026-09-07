@@ -11,7 +11,7 @@ from data.braintumor import makeBrainDataloader
 
 from deepinv.transform import Shift, Scale, Rotate, Reflect
 from deepinv.transform.projective import Affine, Similarity, Euclidean, PanTiltRotate
-from transforms.composed_transforms import InpaintingShiftScale
+from transforms.composed_transforms import InpaintingShiftScale, SRLowRes
 from transforms.spectral_transforms import SpectralScale
 
 
@@ -89,6 +89,8 @@ def transform_name_to_dict(name, n_trans):
         ei = InpaintingShiftScale(device=device)
     elif name == 'SpectralScale':
         ei = SpectralScale(device=device)
+    elif name == 'ScaleScale':
+        ei = SRLowRes(device=device)
     else:
         raise NotImplementedError(f"{name} is not a valid transform name")
     back_dict = {'name': name, 'transform': ei}
